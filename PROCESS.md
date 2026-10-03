@@ -2,7 +2,7 @@
 
 ## Tools
 
-I used Codex to inspect the committed Hong Kong Observatory CSV, develop and revise the Python plot, and check the result against the assignment requirements. I wanted a more artistic chart and then asked for a white background and an all-blue scale in which taller marks are darker. I reviewed the generated images and gave feedback on their appearance. Codex used `uv` to run the script and the assignment's checker to verify the repository structure.
+I used Codex to inspect the committed Hong Kong Observatory CSV, develop and revise the Python plot, build a month-by-month interactive version, and check the result against the assignment requirements. I wanted a more artistic chart and then asked for a white background and an all-blue scale in which taller marks are darker. For the website, I asked that the circle start empty and reveal a month's bars from their roots when someone hovers nearby. I reviewed the generated images and gave feedback on their appearance. Codex used `uv` to run the scripts and the assignment's checker to verify the repository structure.
 
 ## Kept
 
