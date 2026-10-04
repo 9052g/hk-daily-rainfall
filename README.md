@@ -16,7 +16,7 @@ This image uses the latest 365 calendar days in the committed file: 1 September 
 
 ## Interactive version
 
-[Explore the rainfall wheel month by month](https://9052g.github.io/hk-daily-rainfall/). It begins with an empty circle. Hover over a month to grow its daily marks from the inner ring; click or tap to keep that month visible. The page is generated from the same committed CSV and contains its data, so the generated HTML also works offline.
+[Explore the rainfall wheel month by month](https://9052g.github.io/hk-daily-rainfall/). It begins with an empty circle. Hover over a month to grow its daily marks from the inner ring; click or tap to keep that month visible, or choose **Show All** to reveal the entire year. The page is generated from the same committed CSV and contains its data, so the generated HTML also works offline.
 
 ## Run it
 

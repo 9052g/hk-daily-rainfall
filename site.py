@@ -4,6 +4,7 @@
 # ///
 """Build a self-contained interactive rainfall page from the committed CSV."""
 
+import argparse
 import calendar
 import csv
 import datetime as dt
@@ -240,6 +241,7 @@ HTML = r"""<!doctype html>
       color: #0b4b79;
       outline: none;
     }
+    .all-button { min-width: 100px; border-color: #8abdda; color: #0b4b79; }
     .footer {
       display: flex;
       flex-wrap: wrap;
@@ -275,10 +277,10 @@ HTML = r"""<!doctype html>
       <p class="edition" id="period"></p>
     </header>
     <h1>A year of rain, revealed month by month.</h1>
-    <p class="intro">Move your cursor around the circle. A month’s days rise from the inner ring: taller, darker blue marks mean more rainfall. Tap or select a month to keep it visible.</p>
+    <p class="intro">Move your cursor around the circle. A month’s straight rain marks rise from the inner ring: longer marks and deeper blue tips mean more rainfall. Select a month or reveal the whole year.</p>
     <section class="stage" aria-label="Interactive rainfall wheel">
       <div class="wheel-wrap">
-        <svg id="wheel" viewBox="0 0 1000 1000" role="img" aria-label="365-day circular rainfall chart. Hover or select a month to reveal its daily bars."></svg>
+        <svg id="wheel" viewBox="0 0 1000 1000" role="img" aria-label="365-day circular rainfall chart. Hover or select a month, or show every month, to reveal straight daily marks."></svg>
       </div>
       <aside class="side" aria-live="polite">
         <div class="side-rule"></div>
@@ -288,7 +290,7 @@ HTML = r"""<!doctype html>
         <span class="unit" id="side-unit">daily rainfall · millimetres</span>
       </aside>
     </section>
-    <nav class="month-list" id="month-buttons" aria-label="Choose a month"></nav>
+    <nav class="month-list" id="month-buttons" aria-label="Choose a month or show the whole year"></nav>
     <footer class="footer">
       <p>One mark per day · 365 days · a square-root length scale keeps heavy storms in view.</p>
       <p><a href="https://data.weather.gov.hk/weatherAPI/cis/csvfile/HKO/ALL/daily_HKO_RF_ALL.csv">Source: Hong Kong Observatory</a> · “Trace” is shown as 0.025 mm.</p>
@@ -303,6 +305,7 @@ HTML = r"""<!doctype html>
     const barsByMonth = data.months.map(() => []);
     const labels = [];
     const buttons = [];
+    let allButton;
     const maxRoot = Math.sqrt(data.maxRain);
     let pinned = null;
     let visible = null;
@@ -341,10 +344,16 @@ HTML = r"""<!doctype html>
     }
     function show(index) {
       buttons.forEach((button, i) => button.setAttribute("aria-pressed", String(i === pinned)));
+      allButton.setAttribute("aria-pressed", String(pinned === "all"));
       if (visible === index) return;
       if (visible !== null) {
-        barsByMonth[visible].forEach(bar => bar.classList.remove("active"));
-        labels[visible].classList.remove("active");
+        if (visible === "all") {
+          barsByMonth.flat().forEach(bar => bar.classList.remove("active"));
+          labels.forEach(label => label.classList.remove("active"));
+        } else {
+          barsByMonth[visible].forEach(bar => bar.classList.remove("active"));
+          labels[visible].classList.remove("active");
+        }
       }
       visible = index;
       if (index === null) {
@@ -356,36 +365,63 @@ HTML = r"""<!doctype html>
         document.getElementById("side-unit").textContent = "daily rainfall · millimetres";
         return;
       }
+      if (index === "all") {
+        barsByMonth.flat().forEach(bar => bar.classList.add("active"));
+        labels.forEach(label => label.classList.add("active"));
+        document.getElementById("center-main").textContent = "A YEAR";
+        document.getElementById("center-sub").textContent = "365 days · all months visible";
+        document.getElementById("side-title").textContent = "The whole year";
+        document.getElementById("side-copy").textContent = "Each straight mark is one day. Its length shows rainfall; blue deepens from the root to the tip and with the amount.";
+        document.getElementById("side-number").textContent = data.total.toLocaleString() + " mm";
+        document.getElementById("side-unit").textContent = "annual rainfall";
+        return;
+      }
       const month = data.months[index];
       barsByMonth[index].forEach(bar => bar.classList.add("active"));
       labels[index].classList.add("active");
       document.getElementById("center-main").textContent = month.short;
       document.getElementById("center-sub").textContent = month.year + " · " + month.rainDays + " rain / trace days";
       document.getElementById("side-title").textContent = month.name + " " + month.year;
-      document.getElementById("side-copy").textContent = "Each blue line is one calendar day. Length and colour both follow its rainfall.";
+      document.getElementById("side-copy").textContent = "Each straight mark is one calendar day. Its length and darker blue tip both follow rainfall.";
       document.getElementById("side-number").textContent = month.total.toLocaleString() + " mm";
       document.getElementById("side-unit").textContent = "monthly rainfall";
     }
-    function preview(index) { show(index); }
+    function preview(index) {
+      if (pinned === "all" && index !== "all") return;
+      show(index);
+    }
     function restore() { show(pinned); }
     function toggle(index) {
       pinned = pinned === index ? null : index;
       show(pinned);
     }
 
+    const gradients = add(svg, "defs");
     [BASE, BASE + 56, BASE + 112, BASE + 170].forEach(radius =>
       add(svg, "circle", {cx: CX, cy: CY, r: radius, class: radius === BASE ? "baseline" : "guide"}));
 
     const bars = add(svg, "g", {"aria-hidden": "true"});
     data.days.forEach((day, index) => {
       const angle = index / data.days.length * TWO_PI;
-      const length = day.rain === 0 ? 9 : 14 + MAX_LENGTH * Math.sqrt(day.rain) / maxRoot;
+      const height = Math.sqrt(day.rain) / maxRoot;
+      const length = day.rain === 0 ? 9 : 14 + MAX_LENGTH * height;
       const [x1, y1] = point(angle, BASE);
       const [x2, y2] = point(angle, BASE + length);
+      const gradientId = "rain-gradient-" + index;
+      if (day.rain > 0) {
+        const gradient = add(gradients, "linearGradient", {
+          id: gradientId, gradientUnits: "userSpaceOnUse",
+          x1, y1, x2, y2
+        });
+        add(gradient, "stop", {offset: "0%", "stop-color": "#b6daed"});
+        add(gradient, "stop", {offset: "100%", "stop-color": blue(day.rain)});
+      }
       const rank = index - data.months[day.month].start;
-      const line = add(bars, "line", {
-        x1, y1, x2, y2, pathLength: 1, class: "rain-bar",
-        stroke: blue(day.rain), "stroke-width": day.rain === 0 ? 2.2 : 3.5,
+      const line = add(bars, "path", {
+        d: `M ${x1} ${y1} L ${x2} ${y2}`,
+        pathLength: 1, class: "rain-bar",
+        stroke: day.rain === 0 ? "#c7dfef" : `url(#${gradientId})`,
+        "stroke-width": day.rain === 0 ? 2.2 : 3.5,
         style: "--delay:" + rank * 12 + "ms"
       });
       barsByMonth[day.month].push(line);
@@ -435,6 +471,18 @@ HTML = r"""<!doctype html>
     });
 
     const buttonList = document.getElementById("month-buttons");
+    allButton = document.createElement("button");
+    allButton.type = "button";
+    allButton.className = "month-button all-button";
+    allButton.textContent = "SHOW ALL";
+    allButton.setAttribute("aria-label", "Show all months");
+    allButton.setAttribute("aria-pressed", "false");
+    allButton.addEventListener("mouseenter", () => preview("all"));
+    allButton.addEventListener("mouseleave", restore);
+    allButton.addEventListener("focus", () => preview("all"));
+    allButton.addEventListener("blur", restore);
+    allButton.addEventListener("click", () => toggle("all"));
+    buttonList.appendChild(allButton);
     data.months.forEach((month, index) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -456,13 +504,15 @@ HTML = r"""<!doctype html>
 """
 
 
-def main() -> None:
+def main(output: Path = OUTPUT) -> None:
     data = page_data(load_recent_days(DATA))
-    OUTPUT.parent.mkdir(exist_ok=True)
+    output.parent.mkdir(exist_ok=True)
     serialized = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    OUTPUT.write_text(HTML.replace("__DATA__", serialized), encoding="utf-8")
-    print(f"Interactive rainfall page saved to {OUTPUT}")
+    output.write_text(HTML.replace("__DATA__", serialized), encoding="utf-8")
+    print(f"Interactive rainfall page saved to {output}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=OUTPUT)
+    main(parser.parse_args().output)
