@@ -20,7 +20,7 @@ This image uses the latest 365 calendar days in the committed file: 1 September 
 
 The alternative line-only image lightly smooths daily values and joins the last day to the first to make a closed annual form. Its interior fades from pale to deep blue as radial height increases. It is an artistic interpretation, not an additional measurement; for individual daily amounts, use the bars or source CSV.
 
-In the third image, the outer blue shape is the same rainfall curve and the inner twelve-part ring shows monthly mean air temperature. Green means cooler and red means warmer on a fixed 15–30 °C colour scale. Each sector is labelled with its monthly mean; the temperature colours do not represent rainfall amounts.
+In the third image, the outer blue shape is the same rainfall curve and the inner ring shows monthly mean air temperature. Green means cooler and red means warmer on a fixed 15–30 °C colour scale. Each month is labelled with its measured mean; the continuous colour between month midpoints is interpolated only for the visual transition, not measured daily temperature. The temperature colours do not represent rainfall amounts.
 
 ## Interactive version
 

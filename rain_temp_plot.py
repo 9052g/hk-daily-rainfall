@@ -111,18 +111,29 @@ if size != (1800, 1800):
 for month in months:
     average = sum(month["values"]) / len(month["values"])
     month["average"] = average
-    start = -90 + 360 * month["start"] / len(days)
-    end = -90 + 360 * (month["end"] + 1) / len(days)
-    draw.pieslice((CX - OUTER, CY - OUTER, CX + OUTER, CY + OUTER),
-                  start=start, end=end, fill=temperature_colour(average))
 
-# Cut out the centre, separate the monthly sectors, and write each mean on its arc.
+# Blend colours between month midpoints around the annual cycle. The labels below
+# remain the observed monthly means; colours between them are visual interpolation.
+centres = [(month["start"] + month["end"]) / 2 for month in months]
+knots = ([(centres[-1] - len(days), months[-1]["average"])]
+         + list(zip(centres, (month["average"] for month in months)))
+         + [(centres[0] + len(days), months[0]["average"])])
+for step in range(3600):
+    position = step * len(days) / 3600
+    for left, right in zip(knots, knots[1:]):
+        if left[0] <= position <= right[0]:
+            fraction = (position - left[0]) / (right[0] - left[0])
+            eased = fraction * fraction * (3 - 2 * fraction)
+            value = left[1] + (right[1] - left[1]) * eased
+            break
+    angle = 2 * math.pi * position / len(days)
+    x0, y0 = CX + math.sin(angle) * (INNER - 1), CY - math.cos(angle) * (INNER - 1)
+    x1, y1 = CX + math.sin(angle) * (OUTER + 1), CY - math.cos(angle) * (OUTER + 1)
+    draw.line((x0, y0, x1, y1), fill=temperature_colour(value), width=2)
+
+# Cut out the centre and write each actual monthly mean on its arc.
 draw.ellipse((CX - INNER, CY - INNER, CX + INNER, CY + INNER), fill="white")
 for month in months:
-    angle = 2 * math.pi * month["start"] / len(days)
-    x0, y0 = CX + math.sin(angle) * INNER, CY - math.cos(angle) * INNER
-    x1, y1 = CX + math.sin(angle) * OUTER, CY - math.cos(angle) * OUTER
-    draw.line((x0, y0, x1, y1), fill="white", width=3)
     middle = (month["start"] + month["end"]) / 2
     angle = 2 * math.pi * middle / len(days)
     radius = (INNER + OUTER) / 2
@@ -131,6 +142,8 @@ for month in months:
     centered(draw, (x, y), f"{month['average']:.1f}°", font(19, bold=True), colour)
 
 draw.ellipse((CX - INNER, CY - INNER, CX + INNER, CY + INNER),
+             outline=(214, 225, 229), width=2)
+draw.ellipse((CX - OUTER, CY - OUTER, CX + OUTER, CY + OUTER),
              outline=(214, 225, 229), width=2)
 centered(draw, (900, 768), "RAIN + TEMP", font(52, bold=True), INK)
 centered(draw, (900, 827), "HONG KONG OBSERVATORY", font(22, bold=True), (20, 107, 157))
