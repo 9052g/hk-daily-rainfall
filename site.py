@@ -184,6 +184,17 @@ HTML = r"""<!doctype html>
       opacity: 1;
       transition-delay: var(--delay);
     }
+    .rain-curve {
+      fill: none;
+      stroke: #0b4b79;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .rain-curve.active { opacity: .72; transition-delay: 360ms; }
     .hit-sector { fill: transparent; cursor: pointer; }
     .hit-sector:focus-visible { fill: #1472aa12; outline: none; }
     .center-copy { text-anchor: middle; pointer-events: none; }
@@ -266,7 +277,7 @@ HTML = r"""<!doctype html>
       .center-main { font-size: 54px; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .rain-bar, .month-label { transition-duration: 0ms; transition-delay: 0ms !important; }
+      .rain-bar, .rain-curve, .month-label { transition-duration: 0ms; transition-delay: 0ms !important; }
     }
   </style>
 </head>
@@ -277,7 +288,7 @@ HTML = r"""<!doctype html>
       <p class="edition" id="period"></p>
     </header>
     <h1>A year of rain, revealed month by month.</h1>
-    <p class="intro">Move your cursor around the circle. A month’s straight rain marks rise from the inner ring: longer marks and deeper blue tips mean more rainfall. Select a month or reveal the whole year.</p>
+    <p class="intro">Move your cursor around the circle. A month’s straight rain marks rise from the inner ring, while a smooth line connects their tips. Longer marks and deeper blue mean more rainfall. Select a month or reveal the whole year.</p>
     <section class="stage" aria-label="Interactive rainfall wheel">
       <div class="wheel-wrap">
         <svg id="wheel" viewBox="0 0 1000 1000" role="img" aria-label="365-day circular rainfall chart. Hover or select a month, or show every month, to reveal straight daily marks."></svg>
@@ -303,6 +314,8 @@ HTML = r"""<!doctype html>
     const CX = 500, CY = 500, BASE = 282, MAX_LENGTH = 170;
     const TWO_PI = Math.PI * 2;
     const barsByMonth = data.months.map(() => []);
+    const curvesByMonth = [];
+    const boundaryCurves = [];
     const labels = [];
     const buttons = [];
     let allButton;
@@ -349,9 +362,12 @@ HTML = r"""<!doctype html>
       if (visible !== null) {
         if (visible === "all") {
           barsByMonth.flat().forEach(bar => bar.classList.remove("active"));
+          curvesByMonth.forEach(curve => curve.classList.remove("active"));
+          boundaryCurves.forEach(curve => curve.classList.remove("active"));
           labels.forEach(label => label.classList.remove("active"));
         } else {
           barsByMonth[visible].forEach(bar => bar.classList.remove("active"));
+          curvesByMonth[visible].classList.remove("active");
           labels[visible].classList.remove("active");
         }
       }
@@ -367,22 +383,25 @@ HTML = r"""<!doctype html>
       }
       if (index === "all") {
         barsByMonth.flat().forEach(bar => bar.classList.add("active"));
+        curvesByMonth.forEach(curve => curve.classList.add("active"));
+        boundaryCurves.forEach(curve => curve.classList.add("active"));
         labels.forEach(label => label.classList.add("active"));
         document.getElementById("center-main").textContent = "A YEAR";
         document.getElementById("center-sub").textContent = "365 days · all months visible";
         document.getElementById("side-title").textContent = "The whole year";
-        document.getElementById("side-copy").textContent = "Each straight mark is one day. Its length shows rainfall; blue deepens from the root to the tip and with the amount.";
+        document.getElementById("side-copy").textContent = "Each straight mark is one day. A smooth line joins their tips; length and deeper blue show more rainfall.";
         document.getElementById("side-number").textContent = data.total.toLocaleString() + " mm";
         document.getElementById("side-unit").textContent = "annual rainfall";
         return;
       }
       const month = data.months[index];
       barsByMonth[index].forEach(bar => bar.classList.add("active"));
+      curvesByMonth[index].classList.add("active");
       labels[index].classList.add("active");
       document.getElementById("center-main").textContent = month.short;
       document.getElementById("center-sub").textContent = month.year + " · " + month.rainDays + " rain / trace days";
       document.getElementById("side-title").textContent = month.name + " " + month.year;
-      document.getElementById("side-copy").textContent = "Each straight mark is one calendar day. Its length and darker blue tip both follow rainfall.";
+      document.getElementById("side-copy").textContent = "Each straight mark is one calendar day. A smooth line connects their tips; its shape follows the daily values.";
       document.getElementById("side-number").textContent = month.total.toLocaleString() + " mm";
       document.getElementById("side-unit").textContent = "monthly rainfall";
     }
@@ -425,6 +444,44 @@ HTML = r"""<!doctype html>
         style: "--delay:" + rank * 12 + "ms"
       });
       barsByMonth[day.month].push(line);
+    });
+
+    // Shape-preserving cubic interpolation passes through every displayed tip.
+    const tipRadii = data.days.map(day => BASE + (day.rain === 0 ? 9 :
+      14 + MAX_LENGTH * Math.sqrt(day.rain) / maxRoot));
+    const changes = tipRadii.slice(1).map((radius, index) => radius - tipRadii[index]);
+    const slopes = tipRadii.map((_, index) => {
+      if (index === 0) return changes[0];
+      if (index === tipRadii.length - 1) return changes[changes.length - 1];
+      const before = changes[index - 1], after = changes[index];
+      return before * after > 0 ? Math.sign(after) * Math.min(Math.abs(before), Math.abs(after)) : 0;
+    });
+    function smoothSegment(index) {
+      const first = point(index / data.days.length * TWO_PI, tipRadii[index]);
+      let path = `M ${first[0]} ${first[1]}`;
+      for (let step = 1; step <= 8; step++) {
+        const t = step / 8, t2 = t * t, t3 = t2 * t;
+        const radius = (2 * t3 - 3 * t2 + 1) * tipRadii[index]
+          + (t3 - 2 * t2 + t) * slopes[index]
+          + (-2 * t3 + 3 * t2) * tipRadii[index + 1]
+          + (t3 - t2) * slopes[index + 1];
+        const [x, y] = point((index + t) / data.days.length * TWO_PI, radius);
+        path += ` L ${x} ${y}`;
+      }
+      return path;
+    }
+    const curveLayer = add(svg, "g", {"aria-hidden": "true"});
+    data.months.forEach(month => {
+      let path = "";
+      for (let index = month.start; index < month.end; index++) {
+        path += smoothSegment(index) + " ";
+      }
+      curvesByMonth.push(add(curveLayer, "path", {d: path, class: "rain-curve"}));
+      if (month.end < data.days.length - 1) {
+        boundaryCurves.push(add(curveLayer, "path", {
+          d: smoothSegment(month.end), class: "rain-curve"
+        }));
+      }
     });
 
     add(svg, "text", {x: CX, y: CY - 64, class: "center-copy center-kicker"})

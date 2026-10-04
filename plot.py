@@ -46,6 +46,33 @@ def month_positions(dates: pd.Series) -> list[tuple[float, str]]:
     return positions
 
 
+def smooth_tip_curve(radii: np.ndarray, samples_per_day: int = 8) -> tuple[np.ndarray, np.ndarray]:
+    """Interpolate between daily tips without inventing higher peaks or lower troughs."""
+    differences = np.diff(radii)
+    slopes = np.zeros_like(radii)
+    slopes[0], slopes[-1] = differences[0], differences[-1]
+    for index in range(1, len(radii) - 1):
+        before, after = differences[index - 1], differences[index]
+        if before * after > 0:
+            slopes[index] = np.sign(after) * min(abs(before), abs(after))
+
+    day_positions = []
+    smooth_radii = []
+    for index in range(len(radii) - 1):
+        for fraction in np.linspace(0, 1, samples_per_day, endpoint=False):
+            squared = fraction * fraction
+            cubed = squared * fraction
+            radius = ((2 * cubed - 3 * squared + 1) * radii[index]
+                      + (cubed - 2 * squared + fraction) * slopes[index]
+                      + (-2 * cubed + 3 * squared) * radii[index + 1]
+                      + (cubed - squared) * slopes[index + 1])
+            day_positions.append(index + fraction)
+            smooth_radii.append(radius)
+    day_positions.append(len(radii) - 1)
+    smooth_radii.append(radii[-1])
+    return np.asarray(day_positions), np.asarray(smooth_radii)
+
+
 def plot_rainfall_wheel(df: pd.DataFrame, output_image: Path) -> None:
     """Turn one year of daily rainfall into a circular field of rain marks."""
     days = len(df)
@@ -77,6 +104,11 @@ def plot_rainfall_wheel(df: pd.DataFrame, output_image: Path) -> None:
             ax.scatter(angle, baseline + length, s=7 + min(amount, 80) * 0.24,
                        color=colour, alpha=0.92, edgecolors="none", zorder=4)
 
+    tip_radii = baseline + np.where(rain > 0, lengths, 0.10)
+    day_positions, smooth_radii = smooth_tip_curve(tip_radii)
+    ax.plot(2 * np.pi * day_positions / days, smooth_radii, color="#0b4b79",
+            linewidth=0.9, alpha=0.68, zorder=3)
+
     # Fine circular guides make magnitude readable without dominating the image.
     for value in (10, 50, 100):
         radius = baseline + 0.25 + 2.55 * np.sqrt(value) / maximum
@@ -103,7 +135,7 @@ def plot_rainfall_wheel(df: pd.DataFrame, output_image: Path) -> None:
             transform=ax.transAxes, color=INK, fontsize=10, ha="center")
     ax.text(0.5, 0.421, f"{start} — {end}", transform=ax.transAxes,
             color=MUTED, fontsize=7.5, ha="center")
-    ax.text(0.5, 0.055, "Each mark is one day · longer, darker blue means more rain",
+    ax.text(0.5, 0.055, "Each mark is one day · a smooth line joins the daily tips",
             transform=ax.transAxes, color=MUTED, fontsize=7.5, ha="center")
 
     ax.set_ylim(0, baseline + 3.15)
