@@ -101,8 +101,6 @@ def plot_rainfall_wheel(df: pd.DataFrame, output_image: Path) -> None:
             colour = cmap(norm(np.sqrt(amount)))
             ax.bar(angle, length, width=width, bottom=baseline,
                    color=colour, alpha=0.92, linewidth=0)
-            ax.scatter(angle, baseline + length, s=7 + min(amount, 80) * 0.24,
-                       color=colour, alpha=0.92, edgecolors="none", zorder=4)
 
     tip_radii = baseline + np.where(rain > 0, lengths, 0.10)
     day_positions, smooth_radii = smooth_tip_curve(tip_radii)
