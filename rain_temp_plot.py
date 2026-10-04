@@ -2,7 +2,7 @@
 # requires-python = ">=3.10"
 # dependencies = ["pillow"]
 # ///
-"""Add monthly mean air temperature inside the separate rainfall curve artwork."""
+"""Add monthly mean air temperature between month labels and rainfall curve."""
 
 import csv
 import datetime as dt
@@ -16,7 +16,8 @@ from PIL import Image, ImageDraw, ImageFont
 HERE = Path(__file__).parent
 BASE_IMAGE = HERE / "out" / "rainfall_closed_curve.png"
 OUTPUT = HERE / "out" / "rainfall_temperature_ring.png"
-INNER, OUTER = 248, 313
+INNER, OUTER = 318, 368
+MONTH_RADIUS = 284
 CX, CY = 900, 910
 GREEN = (40, 149, 110)
 YELLOW = (245, 195, 77)
@@ -108,6 +109,10 @@ size = canvas.size
 if size != (1800, 1800):
     raise ValueError(f"Unexpected base image size: {size}")
 
+# The base rainfall artwork has month labels here; clear its centre so the
+# months can move inward without altering the blue rainfall shape outside.
+draw.ellipse((CX - 375, CY - 375, CX + 375, CY + 375), fill="white")
+
 for month in months:
     average = sum(month["values"]) / len(month["values"])
     month["average"] = average
@@ -118,8 +123,8 @@ centres = [(month["start"] + month["end"]) / 2 for month in months]
 knots = ([(centres[-1] - len(days), months[-1]["average"])]
          + list(zip(centres, (month["average"] for month in months)))
          + [(centres[0] + len(days), months[0]["average"])])
-for step in range(3600):
-    position = step * len(days) / 3600
+for step in range(4200):
+    position = step * len(days) / 4200
     for left, right in zip(knots, knots[1:]):
         if left[0] <= position <= right[0]:
             fraction = (position - left[0]) / (right[0] - left[0])
@@ -131,11 +136,15 @@ for step in range(3600):
     x1, y1 = CX + math.sin(angle) * (OUTER + 1), CY - math.cos(angle) * (OUTER + 1)
     draw.line((x0, y0, x1, y1), fill=temperature_colour(value), width=2)
 
-# Cut out the centre and write each actual monthly mean on its arc.
+# Cut out the centre, then label the months inside the temperature ring.
 draw.ellipse((CX - INNER, CY - INNER, CX + INNER, CY + INNER), fill="white")
 for month in months:
     middle = (month["start"] + month["end"]) / 2
     angle = 2 * math.pi * middle / len(days)
+    x = CX + math.sin(angle) * MONTH_RADIUS
+    y = CY - math.cos(angle) * MONTH_RADIUS
+    centered(draw, (x, y), dt.date(*month["key"], 1).strftime("%b").upper(),
+             font(19), MUTED)
     radius = (INNER + OUTER) / 2
     x, y = CX + math.sin(angle) * radius, CY - math.cos(angle) * radius
     colour = INK if 21.5 < month["average"] < 26 else (255, 255, 255)
@@ -152,7 +161,7 @@ centered(draw, (900, 886), f"{sum(day['rain'] for day in days):,.0f} mm  ·  365
 centered(draw, (900, 936),
          f"{days[0]['date']:%d %b %Y} — {days[-1]['date']:%d %b %Y}",
          font(21), MUTED)
-centered(draw, (900, 996), "INNER RING  /  MONTHLY MEAN AIR TEMP", font(17), MUTED)
+centered(draw, (900, 996), "MIDDLE RING  /  MONTHLY MEAN AIR TEMP", font(17), MUTED)
 
 for x in range(782, 1019):
     colour = temperature_colour(15 + 15 * (x - 782) / (1018 - 782))
@@ -161,7 +170,7 @@ centered(draw, (782, 1070), "15°C", font(18), GREEN)
 centered(draw, (1018, 1070), "30°C", font(18), RED)
 
 draw.rectangle((380, 1605, 1420, 1720), fill="white")
-centered(draw, (900, 1646), "Daily rainfall outside  ·  monthly mean air temperature inside",
+centered(draw, (900, 1646), "Daily rainfall outside  ·  monthly mean air temperature in the middle",
          font(22), MUTED)
 centered(draw, (900, 1690), "Hong Kong Observatory  /  rainfall in mm  ·  air temperature in °C",
          font(18), MUTED)
