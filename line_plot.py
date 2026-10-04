@@ -77,7 +77,33 @@ radii = [BASE + 12 + LENGTH * math.sqrt(amount / largest) for amount in averages
 slopes = [(radii[(index + 1) % len(radii)] - radii[(index - 1) % len(radii)]) / 2
           for index in range(len(radii))]
 
+curve_points = [point(0, radii[0])]
+for index in range(len(radii)):
+    next_index = (index + 1) % len(radii)
+    for step in range(1, 11):
+        t = step / 10
+        t2, t3 = t * t, t * t * t
+        radius = ((2 * t3 - 3 * t2 + 1) * radii[index]
+                  + (t3 - 2 * t2 + t) * slopes[index]
+                  + (-2 * t3 + 3 * t2) * radii[next_index]
+                  + (t3 - t2) * slopes[next_index])
+        curve_points.append(point(index + t, radius))
+
 canvas = Image.new("RGB", (SIZE, SIZE), (255, 255, 255))
+fill_mask = Image.new("L", (SIZE, SIZE), 0)
+mask_draw = ImageDraw.Draw(fill_mask)
+mask_draw.polygon(curve_points, fill=255)
+mask_draw.ellipse((CX - BASE, CY - BASE, CX + BASE, CY + BASE), fill=0)
+
+# Colour is tied to radial height: a pale inner ring deepens towards high peaks.
+gradient = Image.new("RGB", (SIZE, SIZE), (255, 255, 255))
+gradient_draw = ImageDraw.Draw(gradient)
+for radius in range(BASE + 12 + LENGTH, BASE - 1, -1):
+    height = (radius - BASE) / (LENGTH + 12)
+    colour = mix((210, 236, 249), (18, 74, 139), height ** 1.1)
+    gradient_draw.ellipse((CX - radius, CY - radius, CX + radius, CY + radius),
+                          fill=colour)
+canvas.paste(gradient, (0, 0), fill_mask)
 draw = ImageDraw.Draw(canvas)
 
 for amount in (5, 20, 50):
@@ -92,21 +118,13 @@ for amount in (5, 20, 50):
 draw.ellipse((CX - BASE, CY - BASE, CX + BASE, CY + BASE),
              outline=(201, 222, 235), width=3)
 
-previous = point(0, radii[0])
-for index in range(len(radii)):
-    next_index = (index + 1) % len(radii)
-    for step in range(1, 11):
-        t = step / 10
-        t2, t3 = t * t, t * t * t
-        radius = ((2 * t3 - 3 * t2 + 1) * radii[index]
-                  + (t3 - 2 * t2 + t) * slopes[index]
-                  + (-2 * t3 + 3 * t2) * radii[next_index]
-                  + (t3 - t2) * slopes[next_index])
-        current = point(index + t, radius)
-        strength = max(0.0, min(1.0, (radius - BASE - 12) / LENGTH))
-        colour = mix((98, 173, 213), (9, 61, 121), strength ** 0.9)
-        draw.line((previous, current), fill=colour, width=5)
-        previous = current
+previous = curve_points[0]
+for current in curve_points[1:]:
+    radius = math.dist(current, (CX, CY))
+    strength = max(0.0, min(1.0, (radius - BASE - 12) / LENGTH))
+    colour = mix((98, 173, 213), (9, 61, 121), strength ** 0.9)
+    draw.line((previous, current), fill=colour, width=5)
+    previous = current
 
 first = 0
 while first < len(days):

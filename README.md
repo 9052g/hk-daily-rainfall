@@ -16,7 +16,7 @@ The numbers come from the [Hong Kong Observatory's daily rainfall CSV](https://d
 
 This image uses the latest 365 calendar days in the committed file: 1 September 2025 to 31 August 2026. Each thin mark is a day. More rainfall makes the mark longer and its blue darker; pale inner ticks mark dry days. The period totals about 2,932 mm over 190 days with measurable or trace rainfall. The circular format makes clusters and quiet stretches easy to see, but it compresses the numerical scale with a square-root transformation and does not show when during a day the rain fell. It also describes one observing station, not every part of Hong Kong.
 
-The alternative line-only image lightly smooths daily values and joins the last day to the first to make a closed annual form. It is an artistic interpretation, not an additional measurement; for individual daily amounts, use the bars or source CSV.
+The alternative line-only image lightly smooths daily values and joins the last day to the first to make a closed annual form. Its interior fades from pale to deep blue as radial height increases. It is an artistic interpretation, not an additional measurement; for individual daily amounts, use the bars or source CSV.
 
 ## Interactive version
 
